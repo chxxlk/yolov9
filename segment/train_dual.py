@@ -32,7 +32,8 @@ from utils.downloads import attempt_download, is_url
 from utils.general import (LOGGER, TQDM_BAR_FORMAT, check_amp, check_dataset, check_file, check_git_info,
                            check_git_status, check_img_size, check_requirements, check_suffix, check_yaml, colorstr,
                            get_latest_run, increment_path, init_seeds, intersect_dicts, labels_to_class_weights,
-                           labels_to_image_weights, one_cycle, print_args, print_mutation, strip_optimizer, yaml_save)
+                           labels_to_image_weights, one_cycle, print_args, print_mutation, strip_optimizer,
+                           torch_load_compat, yaml_save)
 from utils.loggers import GenericLogger
 from utils.plots import plot_evolve, plot_labels
 from utils.segment.dataloaders import create_dataloader
@@ -96,7 +97,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     if pretrained:
         with torch_distributed_zero_first(LOCAL_RANK):
             weights = attempt_download(weights)  # download if not found locally
-        ckpt = torch.load(weights, map_location='cpu')  # load checkpoint to CPU to avoid CUDA memory leak
+        ckpt = torch_load_compat(weights, map_location='cpu')  # load checkpoint to CPU to avoid CUDA memory leak
         model = SegmentationModel(cfg or ckpt['model'].yaml, ch=3, nc=nc).to(device)
         exclude = ['anchor'] if (cfg or hyp.get('anchors')) and not resume else []  # exclude keys
         csd = ckpt['model'].float().state_dict()  # checkpoint state_dict as FP32
@@ -508,7 +509,7 @@ def main(opt, callbacks=Callbacks()):
             with open(opt_yaml, errors='ignore') as f:
                 d = yaml.safe_load(f)
         else:
-            d = torch.load(last, map_location='cpu')['opt']
+            d = torch_load_compat(last, map_location='cpu')['opt']
         opt = argparse.Namespace(**d)  # replace
         opt.cfg, opt.weights, opt.resume = '', str(last), True  # reinstate
         if is_url(opt_data):

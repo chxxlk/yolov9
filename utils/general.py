@@ -369,6 +369,13 @@ def check_python(minimum='3.7.0'):
     check_version(platform.python_version(), minimum, name='Python ', hard=True)
 
 
+def torch_load_compat(*args, **kwargs):
+    # Load PyTorch checkpoints compatibly across versions where torch.load changed defaults.
+    if 'weights_only' in inspect.signature(torch.load).parameters:
+        kwargs.setdefault('weights_only', False)
+    return torch.load(*args, **kwargs)
+
+
 def _parse_version(value):
     # Parse versions using packaging, tolerating non-standard local version strings.
     try:
@@ -1056,7 +1063,7 @@ def non_max_suppression(
 
 def strip_optimizer(f='best.pt', s=''):  # from utils.general import *; strip_optimizer()
     # Strip optimizer from 'f' to finalize training, optionally save as 's'
-    x = torch.load(f, map_location=torch.device('cpu'))
+    x = torch_load_compat(f, map_location=torch.device('cpu'))
     if x.get('ema'):
         x['model'] = x['ema']  # replace model with ema
     for k in 'optimizer', 'best_fitness', 'ema', 'updates':  # keys

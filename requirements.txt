@@ -1,47 +1,42 @@
-# Python 3.12.13 baseline
-# Install with: python -m pip install -r requirements.txt
-# GPU users can replace the default CPU wheels for torch/torchvision with the
-# matching CUDA wheels from https://pytorch.org/get-started/locally/
-
-# Base ------------------------------------------------------------------------
-gitpython>=3.1.43,<4.0
-ipython>=8.26,<9.0
-matplotlib>=3.8,<4.0
-numpy>=1.26,<3.0
-opencv-python>=4.10,<5.0
-packaging>=24.1,<26.0
-Pillow>=10.4,<12.0
-psutil>=6.0,<8.0
-PyYAML>=6.0.2,<7.0
-requests>=2.32,<3.0
-scipy>=1.13,<2.0
-thop>=0.1.1.post2209072238
-torch>=2.2,<2.12
-torchvision>=0.17,<0.27
-tqdm>=4.66,<5.0
-
-# Logging ---------------------------------------------------------------------
-tensorboard>=2.17,<3.0
-wandb>=0.17,<1.0
-clearml>=1.16,<2.0
-comet_ml>=3.45,<4.0
-
-# Plotting --------------------------------------------------------------------
-pandas>=2.2,<3.0
-seaborn>=0.13,<1.0
-
-# Data / augmentation ---------------------------------------------------------
-albumentations>=1.4,<3.0
-pycocotools>=2.0.8
-
-# Export / deploy (optional, install only when needed) ------------------------
-# coremltools>=8.0
-# onnx>=1.17
-# onnx-simplifier>=0.4.36
-# nvidia-pyindex
-# nvidia-tensorrt
-# openvino-dev>=2024.6
-# paddlepaddle>=3.0
-# tensorflow>=2.17
-# tensorflowjs>=4.20
-# tritonclient[all]>=2.50
+annotated-doc==0.0.4
+annotated-types==0.7.0
+anyio==4.12.0
+certifi==2025.11.12
+charset-normalizer==3.4.4
+click==8.3.1
+colorama==0.4.6
+coloredlogs==15.0.1
+exceptiongroup==1.3.1
+fastapi==0.126.0
+filelock==3.20.1
+flatbuffers==25.12.19
+fsspec==2025.12.0
+h11==0.16.0
+huggingface-hub==0.36.0
+humanfriendly==10.0
+idna==3.11
+joblib==1.5.3
+mpmath==1.3.0
+numpy==2.2.6
+onnxruntime==1.23.2
+packaging==25.0
+protobuf==6.33.2
+pydantic==2.12.5
+pydantic_core==2.41.5
+pyreadline3==3.5.4
+PyYAML==6.0.3
+regex==2025.11.3
+requests==2.32.5
+safetensors==0.7.0
+scikit-learn==1.7.2
+scipy==1.15.3
+starlette==0.50.0
+sympy==1.14.0
+threadpoolctl==3.6.0
+tokenizers==0.22.1
+tqdm==4.67.1
+transformers==4.57.3
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+urllib3==2.6.2
+uvicorn==0.38.0

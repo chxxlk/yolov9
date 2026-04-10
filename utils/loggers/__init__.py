@@ -6,7 +6,7 @@ from pathlib import Path
 import torch
 
 from utils.general import LOGGER, colorstr, cv2
-from utils.general import _parse_version
+from utils.general import _parse_version, torch_load_compat
 from utils.plots import plot_images, plot_labels, plot_results
 from utils.torch_utils import de_parallel
 
@@ -119,7 +119,7 @@ class Loggers():
             if WandbLogger and _try_wandb_login():
                 try:
                     wandb_artifact_resume = isinstance(self.opt.resume, str) and self.opt.resume.startswith('wandb-artifact://')
-                    run_id = torch.load(self.weights).get('wandb_id') if self.opt.resume and not wandb_artifact_resume else None
+                    run_id = torch_load_compat(self.weights).get('wandb_id') if self.opt.resume and not wandb_artifact_resume else None
                     self.opt.hyp = self.hyp  # add hyperparameters
                     self.wandb = WandbLogger(self.opt, run_id)
                 except Exception as e:
