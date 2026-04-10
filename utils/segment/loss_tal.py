@@ -10,7 +10,7 @@ from utils.general import xywh2xyxy, xyxy2xywh
 from utils.metrics import bbox_iou
 from utils.segment.tal.anchor_generator import dist2bbox, make_anchors, bbox2dist
 from utils.segment.tal.assigner import TaskAlignedAssigner
-from utils.torch_utils import de_parallel
+from utils.torch_utils import de_parallel, smart_autocast
 from utils.segment.general import crop_mask
 
 
@@ -26,7 +26,7 @@ class VarifocalLoss(nn.Module):
 
     def forward(self, pred_score, gt_score, label, alpha=0.75, gamma=2.0):
         weight = alpha * pred_score.sigmoid().pow(gamma) * (1 - label) + gt_score * label
-        with torch.cuda.amp.autocast(enabled=False):
+        with smart_autocast(enabled=False):
             loss = (F.binary_cross_entropy_with_logits(pred_score.float(), gt_score.float(),
                                                        reduction="none") * weight).sum()
         return loss

@@ -8,7 +8,7 @@ from utils.general import xywh2xyxy
 from utils.metrics import bbox_iou
 from utils.tal.anchor_generator import dist2bbox, make_anchors, bbox2dist
 from utils.tal.assigner import TaskAlignedAssigner
-from utils.torch_utils import de_parallel
+from utils.torch_utils import de_parallel, smart_autocast
 
 
 def smooth_BCE(eps=0.1):  # https://github.com/ultralytics/yolov3/issues/238#issuecomment-598028441
@@ -23,7 +23,7 @@ class VarifocalLoss(nn.Module):
 
     def forward(self, pred_score, gt_score, label, alpha=0.75, gamma=2.0):
         weight = alpha * pred_score.sigmoid().pow(gamma) * (1 - label) + gt_score * label
-        with torch.cuda.amp.autocast(enabled=False):
+        with smart_autocast(enabled=False):
             loss = (F.binary_cross_entropy_with_logits(pred_score.float(), gt_score.float(),
                                                        reduction="none") * weight).sum()
         return loss

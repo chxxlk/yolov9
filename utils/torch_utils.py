@@ -39,6 +39,13 @@ def smart_inference_mode(torch_1_9=check_version(torch.__version__, '1.9.0')):
     return decorate
 
 
+def smart_autocast(enabled=True, device_type='cuda'):
+    # Returns a version-compatible autocast context manager.
+    if hasattr(torch, 'amp') and hasattr(torch.amp, 'autocast'):
+        return torch.amp.autocast(device_type=device_type, enabled=enabled)
+    return torch.cuda.amp.autocast(enabled=enabled)
+
+
 def smartCrossEntropyLoss(label_smoothing=0.0):
     # Returns nn.CrossEntropyLoss with label smoothing enabled for torch>=1.10.0
     if check_version(torch.__version__, '1.10.0'):
