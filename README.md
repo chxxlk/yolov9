@@ -101,6 +101,36 @@ AutoDL docker environment: https://github.com/WongKinYiu/yolov9/issues/112#issue
 
 ## Installation
 
+### Python 3.12 baseline
+
+This repo now targets `Python 3.12.13` as the primary local development/runtime baseline.
+
+Supported baseline:
+
+- Python `3.12.13`
+- PyTorch `>=2.2,<2.12`
+- TorchVision `>=0.17,<0.27`
+- NumPy `>=1.26,<3.0`
+
+If you already have an older virtual environment in this repo, recreate it. The previous local `.venv` based on Python 3.10 is not the supported baseline for this branch.
+
+```shell
+# create a fresh venv with Python 3.12.13
+python3.12 -m venv .venv
+
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+
+# Linux/macOS
+source .venv/bin/activate
+
+# install baseline dependencies
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements.txt
+```
+
+For NVIDIA CUDA training/inference, install the matching `torch` and `torchvision` wheels from the official PyTorch index first, then install the rest of the repo requirements.
+
 Docker environment (recommended)
 <details><summary> <b>Expand</b> </summary>
 
@@ -113,7 +143,8 @@ apt update
 apt install -y zip htop screen libgl1-mesa-glx
 
 # pip install required packages
-pip install seaborn thop
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements.txt
 
 # go to code folder
 cd /yolov9

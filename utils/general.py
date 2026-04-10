@@ -8,16 +8,18 @@ import os
 import platform
 import random
 import re
+import shlex
 import signal
 import sys
 import time
 import urllib
 from copy import deepcopy
 from datetime import datetime
+from importlib import metadata
 from itertools import repeat
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
-from subprocess import check_output
+from subprocess import CalledProcessError, check_output, run
 from tarfile import is_tarfile
 from typing import Optional
 from zipfile import ZipFile, is_zipfile
@@ -26,10 +28,11 @@ import cv2
 import IPython
 import numpy as np
 import pandas as pd
-import pkg_resources as pkg
 import torch
 import torchvision
 import yaml
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.version import InvalidVersion, parse as parse_version
 
 from utils import TryExcept, emojis
 from utils.downloads import gsutil_getsize
@@ -148,8 +151,13 @@ def user_config_dir(dir='Ultralytics', env_var='YOLOV5_CONFIG_DIR'):
         cfg = {'Windows': 'AppData/Roaming', 'Linux': '.config', 'Darwin': 'Library/Application Support'}  # 3 OS dirs
         path = Path.home() / cfg.get(platform.system(), '')  # OS-specific config dir
         path = (path if is_writeable(path) else Path('/tmp')) / dir  # GCP and AWS lambda fix, only /tmp is writeable
-    path.mkdir(exist_ok=True)  # make if required
-    return path
+    try:
+        path.mkdir(parents=True, exist_ok=True)  # make if required
+        return path
+    except OSError:
+        fallback = Path(os.getenv('TEMP') or '/tmp') / dir
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
 
 
 CONFIG_DIR = user_config_dir()  # Ultralytics settings dir
@@ -361,9 +369,17 @@ def check_python(minimum='3.7.0'):
     check_version(platform.python_version(), minimum, name='Python ', hard=True)
 
 
+def _parse_version(value):
+    # Parse versions using packaging, tolerating non-standard local version strings.
+    try:
+        return parse_version(str(value))
+    except InvalidVersion:
+        return parse_version('0')
+
+
 def check_version(current='0.0.0', minimum='0.0.0', name='version ', pinned=False, hard=False, verbose=False):
     # Check version vs. required version
-    current, minimum = (pkg.parse_version(x) for x in (current, minimum))
+    current, minimum = (_parse_version(x) for x in (current, minimum))
     result = (current == minimum) if pinned else (current >= minimum)  # bool
     s = f'WARNING ⚠️ {name}{minimum} is required by YOLO, but {name}{current} is currently installed'  # string
     if hard:
@@ -371,6 +387,45 @@ def check_version(current='0.0.0', minimum='0.0.0', name='version ', pinned=Fals
     if verbose and not result:
         LOGGER.warning(s)
     return result
+
+
+def parse_requirements_file(file, exclude=()):
+    # Parse pip-style requirement files without relying on deprecated setuptools helpers.
+    requirements = []
+    with Path(file).open(encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            line = line.split(' #', 1)[0].strip()
+            if line.startswith(('-r', '--')):
+                continue
+            requirement = Requirement(line)
+            if requirement.name not in exclude and (not requirement.marker or requirement.marker.evaluate()):
+                requirements.append(str(requirement))
+    return requirements
+
+
+def check_requirement(requirement):
+    # Return installed version for a requirement if it is satisfied, otherwise None.
+    try:
+        parsed = Requirement(requirement) if isinstance(requirement, str) else requirement
+    except InvalidRequirement:
+        return False, None
+
+    if parsed.marker and not parsed.marker.evaluate():
+        return True, None
+
+    try:
+        installed_version = metadata.version(parsed.name)
+    except metadata.PackageNotFoundError:
+        return False, None
+
+    if parsed.specifier and not parsed.specifier.contains(
+        installed_version, prereleases=_parse_version(installed_version).is_prerelease
+    ):
+        return False, installed_version
+    return True, installed_version
 
 
 @TryExcept()
@@ -381,31 +436,36 @@ def check_requirements(requirements=ROOT / 'requirements.txt', exclude=(), insta
     if isinstance(requirements, Path):  # requirements.txt file
         file = requirements.resolve()
         assert file.exists(), f"{prefix} {file} not found, check failed."
-        with file.open() as f:
-            requirements = [f'{x.name}{x.specifier}' for x in pkg.parse_requirements(f) if x.name not in exclude]
+        requirements = parse_requirements_file(file, exclude=exclude)
     elif isinstance(requirements, str):
         requirements = [requirements]
 
-    s = ''
-    n = 0
+    missing = []
     for r in requirements:
-        try:
-            pkg.require(r)
-        except (pkg.VersionConflict, pkg.DistributionNotFound):  # exception if requirements not met
-            s += f'"{r}" '
-            n += 1
+        matched, installed_version = check_requirement(r)
+        if not matched:
+            if installed_version:
+                missing.append(f'{r} (installed: {installed_version})')
+            else:
+                missing.append(r)
 
-    if s and install and AUTOINSTALL:  # check environment variable
-        LOGGER.info(f"{prefix} YOLO requirement{'s' * (n > 1)} {s}not found, attempting AutoUpdate...")
+    if missing and install and AUTOINSTALL:  # check environment variable
+        package_list = ' '.join(f'"{r}"' for r in missing)
+        LOGGER.info(f"{prefix} YOLO requirement{'s' * (len(missing) > 1)} {package_list} not found, attempting AutoUpdate...")
         try:
-            # assert check_online(), "AutoUpdate skipped (offline)"
-            LOGGER.info(check_output(f'pip install {s} {cmds}', shell=True).decode())
+            install_targets = [r.split(' (installed:', 1)[0] for r in missing]
+            command = [sys.executable, '-m', 'pip', 'install', *install_targets, *shlex.split(cmds)]
+            result = run(command, check=True, capture_output=True, text=True)
+            LOGGER.info(result.stdout.strip())
             source = file if 'file' in locals() else requirements
-            s = f"{prefix} {n} package{'s' * (n > 1)} updated per {source}\n" \
+            s = f"{prefix} {len(missing)} package{'s' * (len(missing) > 1)} updated per {source}\n" \
                 f"{prefix} ⚠️ {colorstr('bold', 'Restart runtime or rerun command for updates to take effect')}\n"
             LOGGER.info(s)
-        except Exception as e:
-            LOGGER.warning(f'{prefix} ❌ {e}')
+        except (CalledProcessError, OSError) as e:
+            details = e.stderr.strip() if isinstance(e, CalledProcessError) and e.stderr else str(e)
+            LOGGER.warning(f'{prefix} ❌ {details}')
+    elif missing:
+        LOGGER.warning(f"{prefix} missing packages: {', '.join(missing)}")
 
 
 def check_img_size(imgsz, s=32, floor=0):

@@ -1,47 +1,47 @@
-# requirements
-# Usage: pip install -r requirements.txt
+# Python 3.12.13 baseline
+# Install with: python -m pip install -r requirements.txt
+# GPU users can replace the default CPU wheels for torch/torchvision with the
+# matching CUDA wheels from https://pytorch.org/get-started/locally/
 
 # Base ------------------------------------------------------------------------
-gitpython
-ipython
-matplotlib>=3.2.2
-numpy>=1.18.5
-opencv-python>=4.1.1
-Pillow>=7.1.2
-psutil
-PyYAML>=5.3.1
-requests>=2.23.0
-scipy>=1.4.1
-thop>=0.1.1
-torch>=1.7.0
-torchvision>=0.8.1
-tqdm>=4.64.0
-# protobuf<=3.20.1
+gitpython>=3.1.43,<4.0
+ipython>=8.26,<9.0
+matplotlib>=3.8,<4.0
+numpy>=1.26,<3.0
+opencv-python>=4.10,<5.0
+packaging>=24.1,<26.0
+Pillow>=10.4,<12.0
+psutil>=6.0,<8.0
+PyYAML>=6.0.2,<7.0
+requests>=2.32,<3.0
+scipy>=1.13,<2.0
+thop>=0.1.1.post2209072238
+torch>=2.2,<2.12
+torchvision>=0.17,<0.27
+tqdm>=4.66,<5.0
 
 # Logging ---------------------------------------------------------------------
-tensorboard>=2.4.1
-# clearml>=1.2.0
-# comet
+tensorboard>=2.17,<3.0
+wandb>=0.17,<1.0
+clearml>=1.16,<2.0
+comet_ml>=3.45,<4.0
 
 # Plotting --------------------------------------------------------------------
-pandas>=1.1.4
-seaborn>=0.11.0
+pandas>=2.2,<3.0
+seaborn>=0.13,<1.0
 
-# Export ----------------------------------------------------------------------
-# coremltools>=6.0
-# onnx>=1.9.0
-# onnx-simplifier>=0.4.1
+# Data / augmentation ---------------------------------------------------------
+albumentations>=1.4,<3.0
+pycocotools>=2.0.8
+
+# Export / deploy (optional, install only when needed) ------------------------
+# coremltools>=8.0
+# onnx>=1.17
+# onnx-simplifier>=0.4.36
 # nvidia-pyindex
 # nvidia-tensorrt
-# scikit-learn<=1.1.2
-# tensorflow>=2.4.1
-# tensorflowjs>=3.9.0
-# openvino-dev
-
-# Deploy ----------------------------------------------------------------------
-# tritonclient[all]~=2.24.0
-
-# Extras ----------------------------------------------------------------------
-# mss
-albumentations>=1.0.3
-pycocotools>=2.0
+# openvino-dev>=2024.6
+# paddlepaddle>=3.0
+# tensorflow>=2.17
+# tensorflowjs>=4.20
+# tritonclient[all]>=2.50

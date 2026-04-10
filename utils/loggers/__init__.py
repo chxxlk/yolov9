@@ -1,14 +1,12 @@
 import os
 import warnings
+from importlib import import_module
 from pathlib import Path
 
-import pkg_resources as pkg
 import torch
-from torch.utils.tensorboard import SummaryWriter
 
 from utils.general import LOGGER, colorstr, cv2
-from utils.loggers.clearml.clearml_utils import ClearmlLogger
-from utils.loggers.wandb.wandb_utils import WandbLogger
+from utils.general import _parse_version
 from utils.plots import plot_images, plot_labels, plot_results
 from utils.torch_utils import de_parallel
 
@@ -17,21 +15,12 @@ RANK = int(os.getenv('RANK', -1))
 
 try:
     import wandb
-
     assert hasattr(wandb, '__version__')  # verify package import not local dir
-    if pkg.parse_version(wandb.__version__) >= pkg.parse_version('0.12.2') and RANK in {0, -1}:
-        try:
-            wandb_login_success = wandb.login(timeout=30)
-        except wandb.errors.UsageError:  # known non-TTY terminal issue
-            wandb_login_success = False
-        if not wandb_login_success:
-            wandb = None
 except (ImportError, AssertionError):
     wandb = None
 
 try:
     import clearml
-
     assert hasattr(clearml, '__version__')  # verify package import not local dir
 except (ImportError, AssertionError):
     clearml = None
@@ -41,12 +30,36 @@ try:
         comet_ml = None
     else:
         import comet_ml
-
         assert hasattr(comet_ml, '__version__')  # verify package import not local dir
-        from utils.loggers.comet import CometLogger
-
 except (ModuleNotFoundError, ImportError, AssertionError):
     comet_ml = None
+
+
+def _get_summary_writer():
+    try:
+        return import_module('torch.utils.tensorboard').SummaryWriter
+    except Exception as e:
+        LOGGER.warning(f"{colorstr('TensorBoard: ')}disabled ({e})")
+        return None
+
+
+def _load_logger_class(module_name, class_name, logger_name):
+    try:
+        return getattr(import_module(module_name), class_name)
+    except Exception as e:
+        LOGGER.warning(f"{colorstr(f'{logger_name}: ')}disabled ({e})")
+        return None
+
+
+def _try_wandb_login():
+    if not wandb or RANK not in {0, -1}:
+        return False
+    try:
+        if _parse_version(wandb.__version__) >= _parse_version('0.12.2'):
+            return bool(wandb.login(anonymous='never', relogin=False, timeout=30))
+    except Exception:
+        return False
+    return True
 
 
 class Loggers():
@@ -94,40 +107,45 @@ class Loggers():
         # TensorBoard
         s = self.save_dir
         if 'tb' in self.include and not self.opt.evolve:
-            prefix = colorstr('TensorBoard: ')
-            self.logger.info(f"{prefix}Start with 'tensorboard --logdir {s.parent}', view at http://localhost:6006/")
-            self.tb = SummaryWriter(str(s))
+            SummaryWriter = _get_summary_writer()
+            if SummaryWriter:
+                prefix = colorstr('TensorBoard: ')
+                self.logger.info(f"{prefix}Start with 'tensorboard --logdir {s.parent}', view at http://localhost:6006/")
+                self.tb = SummaryWriter(str(s))
 
         # W&B
         if wandb and 'wandb' in self.include:
-            wandb_artifact_resume = isinstance(self.opt.resume, str) and self.opt.resume.startswith('wandb-artifact://')
-            run_id = torch.load(self.weights).get('wandb_id') if self.opt.resume and not wandb_artifact_resume else None
-            self.opt.hyp = self.hyp  # add hyperparameters
-            self.wandb = WandbLogger(self.opt, run_id)
-            # temp warn. because nested artifacts not supported after 0.12.10
-            # if pkg.parse_version(wandb.__version__) >= pkg.parse_version('0.12.11'):
-            #    s = "YOLO temporarily requires wandb version 0.12.10 or below. Some features may not work as expected."
-            #    self.logger.warning(s)
-        else:
-            self.wandb = None
+            WandbLogger = _load_logger_class('utils.loggers.wandb.wandb_utils', 'WandbLogger', 'Weights & Biases')
+            if WandbLogger and _try_wandb_login():
+                try:
+                    wandb_artifact_resume = isinstance(self.opt.resume, str) and self.opt.resume.startswith('wandb-artifact://')
+                    run_id = torch.load(self.weights).get('wandb_id') if self.opt.resume and not wandb_artifact_resume else None
+                    self.opt.hyp = self.hyp  # add hyperparameters
+                    self.wandb = WandbLogger(self.opt, run_id)
+                except Exception as e:
+                    self.logger.warning(f"{colorstr('Weights & Biases: ')}disabled ({e})")
 
         # ClearML
         if clearml and 'clearml' in self.include:
-            self.clearml = ClearmlLogger(self.opt, self.hyp)
-        else:
-            self.clearml = None
+            ClearmlLogger = _load_logger_class('utils.loggers.clearml.clearml_utils', 'ClearmlLogger', 'ClearML')
+            if ClearmlLogger:
+                try:
+                    self.clearml = ClearmlLogger(self.opt, self.hyp)
+                except Exception as e:
+                    self.logger.warning(f"{colorstr('ClearML: ')}disabled ({e})")
 
         # Comet
         if comet_ml and 'comet' in self.include:
-            if isinstance(self.opt.resume, str) and self.opt.resume.startswith("comet://"):
-                run_id = self.opt.resume.split("/")[-1]
-                self.comet_logger = CometLogger(self.opt, self.hyp, run_id=run_id)
-
-            else:
-                self.comet_logger = CometLogger(self.opt, self.hyp)
-
-        else:
-            self.comet_logger = None
+            CometLogger = _load_logger_class('utils.loggers.comet', 'CometLogger', 'Comet')
+            if CometLogger:
+                try:
+                    if isinstance(self.opt.resume, str) and self.opt.resume.startswith("comet://"):
+                        run_id = self.opt.resume.split("/")[-1]
+                        self.comet_logger = CometLogger(self.opt, self.hyp, run_id=run_id)
+                    else:
+                        self.comet_logger = CometLogger(self.opt, self.hyp)
+                except Exception as e:
+                    self.logger.warning(f"{colorstr('Comet: ')}disabled ({e})")
 
     @property
     def remote_dataset(self):
@@ -319,18 +337,24 @@ class GenericLogger:
         self.include = include
         self.console_logger = console_logger
         self.csv = self.save_dir / 'results.csv'  # CSV logger
+        self.tb = None
+        self.wandb = None
         if 'tb' in self.include:
-            prefix = colorstr('TensorBoard: ')
-            self.console_logger.info(
-                f"{prefix}Start with 'tensorboard --logdir {self.save_dir.parent}', view at http://localhost:6006/")
-            self.tb = SummaryWriter(str(self.save_dir))
+            SummaryWriter = _get_summary_writer()
+            if SummaryWriter:
+                prefix = colorstr('TensorBoard: ')
+                self.console_logger.info(
+                    f"{prefix}Start with 'tensorboard --logdir {self.save_dir.parent}', view at http://localhost:6006/")
+                self.tb = SummaryWriter(str(self.save_dir))
 
         if wandb and 'wandb' in self.include:
-            self.wandb = wandb.init(project=web_project_name(str(opt.project)),
-                                    name=None if opt.name == "exp" else opt.name,
-                                    config=opt)
-        else:
-            self.wandb = None
+            try:
+                _try_wandb_login()
+                self.wandb = wandb.init(project=web_project_name(str(opt.project)),
+                                        name=None if opt.name == "exp" else opt.name,
+                                        config=opt)
+            except Exception as e:
+                self.console_logger.warning(f"{colorstr('Weights & Biases: ')}disabled ({e})")
 
     def log_metrics(self, metrics, epoch):
         # Log metrics dictionary to all loggers
