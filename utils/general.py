@@ -980,6 +980,10 @@ def non_max_suppression(
 
     # Safely obtain device; default to CPU if prediction lacks a .device attribute
     device = getattr(prediction, "device", torch.device("cpu"))
+    # If the prediction tensor is empty, there are no detections to process
+    if prediction.numel() == 0:
+        return []
+
 
 
     mps = 'mps' in device.type  # Apple MPS
