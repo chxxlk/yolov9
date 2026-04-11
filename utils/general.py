@@ -983,6 +983,10 @@ def non_max_suppression(
     # If the prediction tensor is empty, there are no detections to process
     if prediction.numel() == 0:
         return []
+    # If the prediction tensor does not have enough columns (less than 5), return empty results
+    if prediction.shape[1] < 5:
+        return []
+
 
 
 
