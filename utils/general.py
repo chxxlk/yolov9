@@ -967,10 +967,20 @@ def non_max_suppression(
     """
 
     if isinstance(prediction, (list, tuple)):  # YOLO model in validation model, output = (inference_out, loss_out)
+        # YOLO model in validation model, output = (inference_out, loss_out)
         prediction = prediction[0]  # select only inference output
+        # If the selected output is still a list (e.g., list of tensors per image), convert it to a single tensor
+        if isinstance(prediction, list):
+            try:
+                prediction = torch.stack(prediction)
+            except Exception as e:
+                LOGGER.warning(f'Failed to stack prediction list: {e}')
+                # Fallback: concatenate along batch dimension if possible
+                prediction = torch.cat(prediction, dim=0) if all(isinstance(p, torch.Tensor) for p in prediction) else torch.tensor(prediction)
 
     # Safely obtain device; default to CPU if prediction lacks a .device attribute
     device = getattr(prediction, "device", torch.device("cpu"))
+
 
     mps = 'mps' in device.type  # Apple MPS
     if mps:  # MPS not fully supported yet, convert tensors to CPU before NMS
