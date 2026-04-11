@@ -17,6 +17,9 @@ IMAGENET_STD = 0.229, 0.224, 0.225  # RGB standard deviation
 class Albumentations:
     # YOLOv5 Albumentations class (optional, only used if package is installed)
     def __init__(self, size=640):
+        # Validate that a proper size is provided; Albumentations requires an explicit integer size.
+        if not isinstance(size, int) or size <= 0:
+            raise ValueError(f"Albumentations initialization error: 'size' must be a positive integer, got {size!r}")
         self.transform = None
         prefix = colorstr('albumentations: ')
         try:
@@ -39,6 +42,7 @@ class Albumentations:
             pass
         except Exception as e:
             LOGGER.info(f'{prefix}{e}')
+
 
     def __call__(self, im, labels, p=1.0):
         if self.transform and random.random() < p:

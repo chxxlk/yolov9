@@ -969,7 +969,9 @@ def non_max_suppression(
     if isinstance(prediction, (list, tuple)):  # YOLO model in validation model, output = (inference_out, loss_out)
         prediction = prediction[0]  # select only inference output
 
-    device = prediction.device
+    # Safely obtain device; default to CPU if prediction lacks a .device attribute
+    device = getattr(prediction, "device", torch.device("cpu"))
+
     mps = 'mps' in device.type  # Apple MPS
     if mps:  # MPS not fully supported yet, convert tensors to CPU before NMS
         prediction = prediction.cpu()
@@ -992,7 +994,8 @@ def non_max_suppression(
     merge = False  # use merge-NMS
 
     t = time.time()
-    output = [torch.zeros((0, 6 + nm), device=prediction.device)] * bs
+    output = [torch.zeros((0, 6 + nm), device=device)] * bs
+
     for xi, x in enumerate(prediction):  # image index, image inference
         # Apply constraints
         # x[((x[:, 2:4] < min_wh) | (x[:, 2:4] > max_wh)).any(1), 4] = 0  # width-height
